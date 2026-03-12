@@ -28,13 +28,13 @@ pub fn create_router() -> Router<AppState> {
         // Settings - API Keys
         .route("/api/settings/api-keys", get(settings::get_api_keys))
         .route("/api/settings/api-keys", post(settings::create_api_key))
-        .route("/api/settings/api-keys/:id", delete(settings::delete_api_key))
-        .route("/api/settings/api-keys/:id/toggle", put(settings::toggle_api_key))
+        .route("/api/settings/api-keys/{id}", delete(settings::delete_api_key))
+        .route("/api/settings/api-keys/{id}/toggle", put(settings::toggle_api_key))
         // Settings - Credentials
         .route("/api/settings/credentials", get(settings::get_credentials))
         .route("/api/settings/credentials", post(settings::create_credential))
-        .route("/api/settings/credentials/:id", delete(settings::delete_credential))
-        .route("/api/settings/credentials/:id/toggle", put(settings::toggle_credential))
+        .route("/api/settings/credentials/{id}", delete(settings::delete_credential))
+        .route("/api/settings/credentials/{id}/toggle", put(settings::toggle_credential))
         // User
         .route("/api/user/git-config", get(user::get_git_config))
         .route("/api/user/git-config", post(user::update_git_config))
@@ -53,16 +53,16 @@ pub fn create_router() -> Router<AppState> {
         // Remote Servers
         .route("/api/remote-servers", get(remote_servers::list_servers))
         .route("/api/remote-servers", post(remote_servers::create_server))
-        .route("/api/remote-servers/:id", get(remote_servers::get_server))
-        .route("/api/remote-servers/:id", put(remote_servers::update_server))
-        .route("/api/remote-servers/:id", delete(remote_servers::delete_server))
-        .route("/api/remote-servers/:id/test", post(remote_servers::test_connection))
-        .route("/api/remote-servers/:id/deploy", post(remote_servers::deploy_broker))
-        .route("/api/remote-servers/:id/status", get(remote_servers::get_status))
+        .route("/api/remote-servers/{id}", get(remote_servers::get_server))
+        .route("/api/remote-servers/{id}", put(remote_servers::update_server))
+        .route("/api/remote-servers/{id}", delete(remote_servers::delete_server))
+        .route("/api/remote-servers/{id}/test", post(remote_servers::test_connection))
+        .route("/api/remote-servers/{id}/deploy", post(remote_servers::deploy_broker))
+        .route("/api/remote-servers/{id}/status", get(remote_servers::get_status))
         // Session names
-        .route("/api/sessions/:provider/:sessionId/name", post(settings::set_session_name))
-        .route("/api/sessions/:provider/:sessionId/name", get(settings::get_session_name))
-        .route("/api/sessions/:provider/:sessionId/name", delete(settings::delete_session_name))
+        .route("/api/sessions/{provider}/{sessionId}/name", post(settings::set_session_name))
+        .route("/api/sessions/{provider}/{sessionId}/name", get(settings::get_session_name))
+        .route("/api/sessions/{provider}/{sessionId}/name", delete(settings::delete_session_name))
 }
 
 async fn health_check() -> axum::Json<serde_json::Value> {

@@ -55,3 +55,50 @@ impl Database {
         schema::run_migrations(&conn)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_in_memory_database_creation() {
+        let db = Database::in_memory().expect("should create in-memory db");
+        // Verify migrations ran by checking tables exist
+        let conn = db.conn();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='users'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_database_has_all_tables() {
+        let db = Database::in_memory().unwrap();
+        let conn = db.conn();
+        let tables = [
+            "users",
+            "api_keys",
+            "user_credentials",
+            "session_names",
+            "app_config",
+            "servers",
+        ];
+        for table in &tables {
+            let count: i64 = conn
+                .query_row(
+                    &format!(
+                        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{}'",
+                        table
+                    ),
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 1, "table '{}' should exist", table);
+        }
+    }
+}

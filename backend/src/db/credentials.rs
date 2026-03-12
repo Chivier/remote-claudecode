@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use super::Database;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiKey {
     pub id: i64,
     pub key_name: String,
@@ -14,6 +15,7 @@ pub struct ApiKey {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Credential {
     pub id: i64,
     pub credential_name: String,
@@ -257,5 +259,146 @@ impl Database {
             .collect();
         self.set_config("jwt_secret", &secret).ok();
         secret
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::db::Database;
+
+    fn setup_db() -> (Database, i64) {
+        let db = Database::in_memory().unwrap();
+        let user = db.create_user("testuser", "hash").unwrap();
+        (db, user.id)
+    }
+
+    // --- API Key tests ---
+
+    #[test]
+    fn test_create_api_key() {
+        let (db, uid) = setup_db();
+        let key = db.create_api_key(uid, "my-key").unwrap();
+        assert_eq!(key.key_name, "my-key");
+        assert!(key.api_key.starts_with("ck_"));
+        assert_eq!(key.api_key.len(), 3 + 64); // "ck_" + 64 hex chars
+        assert!(key.is_active);
+    }
+
+    #[test]
+    fn test_list_api_keys() {
+        let (db, uid) = setup_db();
+        db.create_api_key(uid, "key1").unwrap();
+        db.create_api_key(uid, "key2").unwrap();
+        let keys = db.get_api_keys(uid).unwrap();
+        assert_eq!(keys.len(), 2);
+    }
+
+    #[test]
+    fn test_validate_api_key() {
+        let (db, uid) = setup_db();
+        let key = db.create_api_key(uid, "valid-key").unwrap();
+        let result = db.validate_api_key(&key.api_key).unwrap();
+        assert!(result.is_some());
+        let (user_id, username) = result.unwrap();
+        assert_eq!(user_id, uid);
+        assert_eq!(username, "testuser");
+    }
+
+    #[test]
+    fn test_validate_invalid_api_key() {
+        let (db, _) = setup_db();
+        let result = db.validate_api_key("ck_nonexistent").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_delete_api_key() {
+        let (db, uid) = setup_db();
+        let key = db.create_api_key(uid, "to-delete").unwrap();
+        assert!(db.delete_api_key(uid, key.id).unwrap());
+        assert_eq!(db.get_api_keys(uid).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_toggle_api_key() {
+        let (db, uid) = setup_db();
+        let key = db.create_api_key(uid, "toggleable").unwrap();
+        // Disable
+        db.toggle_api_key(uid, key.id, false).unwrap();
+        // Should not validate when disabled
+        let result = db.validate_api_key(&key.api_key).unwrap();
+        assert!(result.is_none());
+        // Re-enable
+        db.toggle_api_key(uid, key.id, true).unwrap();
+        let result = db.validate_api_key(&key.api_key).unwrap();
+        assert!(result.is_some());
+    }
+
+    // --- Credential tests ---
+
+    #[test]
+    fn test_create_credential() {
+        let (db, uid) = setup_db();
+        let cred = db.create_credential(uid, "github-token", "github", "ghp_xxx", Some("My GH token")).unwrap();
+        assert_eq!(cred.credential_name, "github-token");
+        assert_eq!(cred.credential_type, "github");
+    }
+
+    #[test]
+    fn test_get_credentials() {
+        let (db, uid) = setup_db();
+        db.create_credential(uid, "gh", "github", "ghp_1", None).unwrap();
+        db.create_credential(uid, "gl", "gitlab", "gl_1", None).unwrap();
+
+        let all = db.get_credentials(uid, None).unwrap();
+        assert_eq!(all.len(), 2);
+
+        let github_only = db.get_credentials(uid, Some("github")).unwrap();
+        assert_eq!(github_only.len(), 1);
+        assert_eq!(github_only[0].credential_type, "github");
+    }
+
+    #[test]
+    fn test_get_active_credential() {
+        let (db, uid) = setup_db();
+        db.create_credential(uid, "gh", "github", "ghp_active", None).unwrap();
+        let val = db.get_active_credential(uid, "github").unwrap();
+        assert_eq!(val.unwrap(), "ghp_active");
+
+        let none = db.get_active_credential(uid, "nonexistent").unwrap();
+        assert!(none.is_none());
+    }
+
+    #[test]
+    fn test_toggle_credential() {
+        let (db, uid) = setup_db();
+        let cred = db.create_credential(uid, "gh", "github", "token", None).unwrap();
+        db.toggle_credential(uid, cred.id, false).unwrap();
+        let val = db.get_active_credential(uid, "github").unwrap();
+        assert!(val.is_none());
+    }
+
+    // --- App Config tests ---
+
+    #[test]
+    fn test_app_config() {
+        let (db, _) = setup_db();
+        assert!(db.get_config("nonexistent").unwrap().is_none());
+
+        db.set_config("test_key", "test_value").unwrap();
+        assert_eq!(db.get_config("test_key").unwrap().unwrap(), "test_value");
+
+        // Upsert
+        db.set_config("test_key", "updated").unwrap();
+        assert_eq!(db.get_config("test_key").unwrap().unwrap(), "updated");
+    }
+
+    #[test]
+    fn test_jwt_secret_generation() {
+        let (db, _) = setup_db();
+        let secret1 = db.get_or_create_jwt_secret();
+        assert_eq!(secret1.len(), 128); // 64 bytes * 2 hex chars
+        let secret2 = db.get_or_create_jwt_secret();
+        assert_eq!(secret1, secret2); // Should return same secret
     }
 }

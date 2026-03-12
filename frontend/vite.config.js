@@ -16,6 +16,9 @@ export default defineConfig(({ command, mode }) => {
     server: {
       host,
       port: parseInt(env.VITE_PORT) || 5173,
+      fs: {
+        allow: ['..']
+      },
       proxy: {
         '/api': `http://${proxyHost}:${port}`,
         '/ws': {

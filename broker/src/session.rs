@@ -69,13 +69,22 @@ impl SessionManager {
             .and_then(|v| v.as_str())
             .unwrap_or(".");
 
+        // Ensure HOME and PATH are set for finding CLI tools
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        let path = std::env::var("PATH").unwrap_or_default();
+        let enhanced_path = format!("{}/.local/bin:{}/.cargo/bin:/usr/local/bin:/usr/bin:/bin:{}", home, home, path);
+
+        tracing::info!("Spawning {} with args {:?} in {}", program, args, cwd);
+
         // Spawn the CLI process
         let child = match Command::new(&program)
             .args(&args)
             .current_dir(cwd)
+            .env("PATH", &enhanced_path)
+            .env("HOME", &home)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .stdin(std::process::Stdio::piped())
+            .stdin(std::process::Stdio::null())
             .spawn()
         {
             Ok(child) => child,
@@ -98,13 +107,38 @@ impl SessionManager {
             },
         );
 
-        // Read stdout
-        let stdout = {
+        // Read stdout and stderr
+        let (stdout, stderr) = {
             let mut c = child.lock().await;
-            c.stdout.take()
+            (c.stdout.take(), c.stderr.take())
         };
 
+        tracing::info!("Process spawned for session {}", actual_session_id);
+
+        // Drop stdin so claude doesn't wait for input
+        {
+            let mut c = child.lock().await;
+            drop(c.stdin.take());
+        }
+
+        // Spawn stderr reader to log errors
+        if let Some(stderr) = stderr {
+            let sid_err = actual_session_id.clone();
+            tokio::spawn(async move {
+                tracing::debug!("Started stderr reader for {}", sid_err);
+                let reader = BufReader::new(stderr);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    if !line.trim().is_empty() {
+                        tracing::warn!("Session {} stderr: {}", sid_err, line);
+                    }
+                }
+                tracing::debug!("stderr reader done for {}", sid_err);
+            });
+        }
+
         if let Some(stdout) = stdout {
+            tracing::debug!("Starting stdout reader for {}", actual_session_id);
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
             let sid = actual_session_id.clone();
@@ -127,6 +161,9 @@ impl SessionManager {
                 };
                 self.send_response(&sender, &response).await;
             }
+            tracing::info!("stdout reader done for {}", actual_session_id);
+        } else {
+            tracing::warn!("No stdout for session {}", actual_session_id);
         }
 
         // Wait for exit
@@ -145,6 +182,26 @@ impl SessionManager {
             exit_code,
         };
         self.send_response(&sender, &response).await;
+    }
+
+    /// Find the actual path for a CLI tool, checking common locations
+    fn find_cli_path(name: &str) -> String {
+        // Check common paths where CLI tools are installed
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        let candidates = [
+            format!("{home}/.local/bin/{name}"),
+            format!("{home}/.nvm/versions/node/*/bin/{name}"),  // won't match with glob, but keeping as fallback
+            format!("/usr/local/bin/{name}"),
+            format!("/usr/bin/{name}"),
+            format!("{home}/.cargo/bin/{name}"),
+        ];
+        for path in &candidates {
+            if std::path::Path::new(path).exists() {
+                return path.clone();
+            }
+        }
+        // Fall back to bare name (relies on PATH)
+        name.to_string()
     }
 
     fn build_cli_command(
@@ -194,7 +251,7 @@ impl SessionManager {
                 args.push("--print".to_string());
                 args.push(command.to_string());
 
-                ("claude".to_string(), args)
+                (Self::find_cli_path("claude"), args)
             }
             "codex" => {
                 let mut args = vec!["--quiet".to_string()];
@@ -203,7 +260,7 @@ impl SessionManager {
                     args.push(model.to_string());
                 }
                 args.push(command.to_string());
-                ("codex".to_string(), args)
+                (Self::find_cli_path("codex"), args)
             }
             "cursor" => {
                 let mut args = vec![];
@@ -212,7 +269,7 @@ impl SessionManager {
                     args.push(model.to_string());
                 }
                 args.push(command.to_string());
-                ("cursor".to_string(), args)
+                (Self::find_cli_path("cursor"), args)
             }
             "gemini" => {
                 let mut args = vec![];
@@ -221,7 +278,7 @@ impl SessionManager {
                     args.push(model.to_string());
                 }
                 args.push(command.to_string());
-                ("gemini".to_string(), args)
+                (Self::find_cli_path("gemini"), args)
             }
             _ => (provider.to_string(), vec![command.to_string()]),
         }

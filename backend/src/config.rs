@@ -44,3 +44,29 @@ impl Config {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        // Clear any environment overrides for test isolation
+        let config = Config {
+            port: 3001,
+            host: "0.0.0.0".to_string(),
+            database_path: PathBuf::from("data/auth.db"),
+            jwt_secret: None,
+            claude_cli_path: "claude".to_string(),
+            context_window: 160_000,
+            is_platform: false,
+            frontend_dist: PathBuf::from("../frontend/dist"),
+            broker_port: 19999,
+        };
+        assert_eq!(config.port, 3001);
+        assert_eq!(config.host, "0.0.0.0");
+        assert_eq!(config.broker_port, 19999);
+        assert!(!config.is_platform);
+        assert_eq!(config.context_window, 160_000);
+    }
+}

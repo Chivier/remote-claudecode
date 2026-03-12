@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::Database;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct User {
     pub id: i64,
     pub username: String,
@@ -18,6 +19,7 @@ pub struct User {
 
 /// Public-facing user info (no password hash)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     pub id: i64,
     pub username: String,
@@ -168,5 +170,102 @@ impl<T> OptionalExt<T> for Result<T, rusqlite::Error> {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::db::Database;
+
+    fn setup_db() -> Database {
+        Database::in_memory().unwrap()
+    }
+
+    #[test]
+    fn test_has_users_empty() {
+        let db = setup_db();
+        assert!(!db.has_users().unwrap());
+    }
+
+    #[test]
+    fn test_create_and_find_user() {
+        let db = setup_db();
+        let user = db.create_user("alice", "hashed_pw").unwrap();
+        assert_eq!(user.username, "alice");
+        assert!(user.id > 0);
+
+        assert!(db.has_users().unwrap());
+    }
+
+    #[test]
+    fn test_get_user_by_username() {
+        let db = setup_db();
+        db.create_user("bob", "hashed").unwrap();
+        let user = db.get_user_by_username("bob").unwrap().unwrap();
+        assert_eq!(user.username, "bob");
+        assert_eq!(user.password_hash, "hashed");
+        assert!(!user.has_completed_onboarding);
+    }
+
+    #[test]
+    fn test_get_user_by_username_not_found() {
+        let db = setup_db();
+        let result = db.get_user_by_username("nobody").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_user_by_id() {
+        let db = setup_db();
+        let created = db.create_user("charlie", "pw").unwrap();
+        let user = db.get_user_by_id(created.id).unwrap().unwrap();
+        assert_eq!(user.username, "charlie");
+    }
+
+    #[test]
+    fn test_get_first_user() {
+        let db = setup_db();
+        assert!(db.get_first_user().unwrap().is_none());
+        db.create_user("first", "pw").unwrap();
+        db.create_user("second", "pw").unwrap();
+        let first = db.get_first_user().unwrap().unwrap();
+        assert_eq!(first.username, "first");
+    }
+
+    #[test]
+    fn test_duplicate_username() {
+        let db = setup_db();
+        db.create_user("alice", "pw1").unwrap();
+        let result = db.create_user("alice", "pw2");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_git_config() {
+        let db = setup_db();
+        let user = db.create_user("dev", "pw").unwrap();
+        db.update_git_config(user.id, "Dev Name", "dev@example.com").unwrap();
+        let (name, email) = db.get_git_config(user.id).unwrap();
+        assert_eq!(name.unwrap(), "Dev Name");
+        assert_eq!(email.unwrap(), "dev@example.com");
+    }
+
+    #[test]
+    fn test_onboarding() {
+        let db = setup_db();
+        let user = db.create_user("new_user", "pw").unwrap();
+        assert!(!db.has_completed_onboarding(user.id).unwrap());
+        db.complete_onboarding(user.id).unwrap();
+        assert!(db.has_completed_onboarding(user.id).unwrap());
+    }
+
+    #[test]
+    fn test_update_last_login() {
+        let db = setup_db();
+        let user = db.create_user("login_user", "pw").unwrap();
+        // Should not panic
+        db.update_last_login(user.id);
+        let fetched = db.get_user_by_username("login_user").unwrap().unwrap();
+        assert!(fetched.last_login.is_some());
     }
 }

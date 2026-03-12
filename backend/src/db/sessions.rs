@@ -90,3 +90,68 @@ impl Database {
         Ok(changes > 0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::db::Database;
+
+    fn setup_db() -> Database {
+        Database::in_memory().unwrap()
+    }
+
+    #[test]
+    fn test_set_and_get_session_name() {
+        let db = setup_db();
+        db.set_session_name("sess-1", "claude", "My Chat").unwrap();
+        let name = db.get_session_name("sess-1", "claude").unwrap();
+        assert_eq!(name.unwrap(), "My Chat");
+    }
+
+    #[test]
+    fn test_session_name_upsert() {
+        let db = setup_db();
+        db.set_session_name("sess-1", "claude", "Old Name").unwrap();
+        db.set_session_name("sess-1", "claude", "New Name").unwrap();
+        let name = db.get_session_name("sess-1", "claude").unwrap();
+        assert_eq!(name.unwrap(), "New Name");
+    }
+
+    #[test]
+    fn test_get_session_name_not_found() {
+        let db = setup_db();
+        let name = db.get_session_name("nonexistent", "claude").unwrap();
+        assert!(name.is_none());
+    }
+
+    #[test]
+    fn test_get_session_names_batch() {
+        let db = setup_db();
+        db.set_session_name("s1", "claude", "Chat 1").unwrap();
+        db.set_session_name("s2", "claude", "Chat 2").unwrap();
+        db.set_session_name("s3", "cursor", "Cursor Chat").unwrap();
+
+        let ids = vec!["s1".to_string(), "s2".to_string(), "s3".to_string()];
+        let names = db.get_session_names(&ids, "claude").unwrap();
+        assert_eq!(names.len(), 2);
+        assert_eq!(names["s1"], "Chat 1");
+        assert_eq!(names["s2"], "Chat 2");
+    }
+
+    #[test]
+    fn test_get_session_names_empty() {
+        let db = setup_db();
+        let names = db.get_session_names(&[], "claude").unwrap();
+        assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_delete_session_name() {
+        let db = setup_db();
+        db.set_session_name("sess-1", "claude", "Chat").unwrap();
+        assert!(db.delete_session_name("sess-1", "claude").unwrap());
+        assert!(db.get_session_name("sess-1", "claude").unwrap().is_none());
+
+        // Deleting non-existent returns false
+        assert!(!db.delete_session_name("nonexistent", "claude").unwrap());
+    }
+}

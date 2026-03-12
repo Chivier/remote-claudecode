@@ -279,3 +279,156 @@ pub enum BrokerResponse {
         params: Value,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_inbound_claude_command_deserialize() {
+        let json = r#"{
+            "type": "claude-command",
+            "command": "hello world",
+            "projectPath": "/home/user/project",
+            "sessionId": "sess-1",
+            "serverId": "local"
+        }"#;
+        let msg: InboundMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            InboundMessage::ClaudeCommand { command, options } => {
+                assert_eq!(command, "hello world");
+                assert_eq!(options.project_path.unwrap(), "/home/user/project");
+                assert_eq!(options.session_id.unwrap(), "sess-1");
+                assert_eq!(options.server_id.unwrap(), "local");
+            }
+            _ => panic!("expected ClaudeCommand"),
+        }
+    }
+
+    #[test]
+    fn test_inbound_abort_session() {
+        let json = r#"{"type": "abort-session", "sessionId": "s1", "provider": "claude"}"#;
+        let msg: InboundMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            InboundMessage::AbortSession { session_id, provider } => {
+                assert_eq!(session_id, "s1");
+                assert_eq!(provider, "claude");
+            }
+            _ => panic!("expected AbortSession"),
+        }
+    }
+
+    #[test]
+    fn test_inbound_permission_response() {
+        let json = r#"{"type": "permission-response", "requestId": "req-1", "approved": true}"#;
+        let msg: InboundMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            InboundMessage::PermissionResponse { request_id, approved } => {
+                assert_eq!(request_id, "req-1");
+                assert!(approved);
+            }
+            _ => panic!("expected PermissionResponse"),
+        }
+    }
+
+    #[test]
+    fn test_server_id_extraction() {
+        let json = r#"{"type": "claude-command", "command": "test", "serverId": "remote-1"}"#;
+        let msg: InboundMessage = serde_json::from_str(json).unwrap();
+        assert_eq!(msg.server_id(), Some("remote-1"));
+
+        let json2 = r#"{"type": "abort-session", "sessionId": "s1", "provider": "claude"}"#;
+        let msg2: InboundMessage = serde_json::from_str(json2).unwrap();
+        assert_eq!(msg2.server_id(), None);
+    }
+
+    #[test]
+    fn test_provider_name() {
+        let cmds = vec![
+            (r#"{"type": "claude-command", "command": "x"}"#, "claude"),
+            (r#"{"type": "cursor-command", "command": "x"}"#, "cursor"),
+            (r#"{"type": "codex-command", "command": "x"}"#, "codex"),
+            (r#"{"type": "gemini-command", "command": "x"}"#, "gemini"),
+        ];
+        for (json, expected) in cmds {
+            let msg: InboundMessage = serde_json::from_str(json).unwrap();
+            assert_eq!(msg.provider_name(), expected);
+        }
+    }
+
+    #[test]
+    fn test_outbound_session_created_serialize() {
+        let msg = OutboundMessage::SessionCreated {
+            session_id: "sess-123".to_string(),
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "session-created");
+        assert_eq!(json["sessionId"], "sess-123");
+    }
+
+    #[test]
+    fn test_outbound_claude_complete_serialize() {
+        let msg = OutboundMessage::ClaudeComplete {
+            session_id: "s1".to_string(),
+            exit_code: 0,
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "claude-complete");
+        assert_eq!(json["exitCode"], 0);
+    }
+
+    #[test]
+    fn test_broker_request_roundtrip() {
+        let req = BrokerRequest::Command {
+            session_id: "s1".to_string(),
+            provider: "claude".to_string(),
+            command: "hello".to_string(),
+            options: serde_json::json!({"model": "opus"}),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let parsed: BrokerRequest = serde_json::from_str(&json).unwrap();
+        match parsed {
+            BrokerRequest::Command { session_id, provider, command, .. } => {
+                assert_eq!(session_id, "s1");
+                assert_eq!(provider, "claude");
+                assert_eq!(command, "hello");
+            }
+            _ => panic!("expected Command"),
+        }
+    }
+
+    #[test]
+    fn test_broker_response_roundtrip() {
+        let resp = BrokerResponse::Complete {
+            session_id: "s1".to_string(),
+            exit_code: 0,
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: BrokerResponse = serde_json::from_str(&json).unwrap();
+        match parsed {
+            BrokerResponse::Complete { session_id, exit_code } => {
+                assert_eq!(session_id, "s1");
+                assert_eq!(exit_code, 0);
+            }
+            _ => panic!("expected Complete"),
+        }
+    }
+
+    #[test]
+    fn test_broker_ping_pong() {
+        let ping = BrokerRequest::Ping;
+        let json = serde_json::to_string(&ping).unwrap();
+        assert!(json.contains("ping"));
+
+        let pong = BrokerResponse::Pong {
+            version: "0.1.0".to_string(),
+            cli_versions: std::collections::HashMap::new(),
+        };
+        let json = serde_json::to_string(&pong).unwrap();
+        let parsed: BrokerResponse = serde_json::from_str(&json).unwrap();
+        match parsed {
+            BrokerResponse::Pong { version, .. } => assert_eq!(version, "0.1.0"),
+            _ => panic!("expected Pong"),
+        }
+    }
+}
