@@ -1,0 +1,29 @@
+[package]
+name = "cloudcli-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.8", features = ["ws", "multipart"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.26"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs", "trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+jsonwebtoken = "9"
+bcrypt = "0.16"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+portable-pty = "0.8"
+futures = "0.3"
+tokio-stream = "0.1"
+async-trait = "0.1"
+dashmap = "6"
+rand = "0.8"
+serde_urlencoded = "0.7"

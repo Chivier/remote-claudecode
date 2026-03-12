@@ -1,0 +1,172 @@
+use serde::{Deserialize, Serialize};
+
+use super::Database;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct User {
+    pub id: i64,
+    pub username: String,
+    #[serde(skip_serializing)]
+    pub password_hash: String,
+    pub created_at: Option<String>,
+    pub last_login: Option<String>,
+    pub is_active: bool,
+    pub git_name: Option<String>,
+    pub git_email: Option<String>,
+    pub has_completed_onboarding: bool,
+}
+
+/// Public-facing user info (no password hash)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserInfo {
+    pub id: i64,
+    pub username: String,
+    pub created_at: Option<String>,
+    pub last_login: Option<String>,
+}
+
+impl Database {
+    pub fn has_users(&self) -> Result<bool, rusqlite::Error> {
+        let conn = self.conn();
+        let count: i64 = conn.query_row("SELECT COUNT(*) FROM users", [], |row| row.get(0))?;
+        Ok(count > 0)
+    }
+
+    pub fn create_user(&self, username: &str, password_hash: &str) -> Result<UserInfo, rusqlite::Error> {
+        let conn = self.conn();
+        conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?1, ?2)",
+            rusqlite::params![username, password_hash],
+        )?;
+        let id = conn.last_insert_rowid();
+        Ok(UserInfo {
+            id,
+            username: username.to_string(),
+            created_at: None,
+            last_login: None,
+        })
+    }
+
+    pub fn get_user_by_username(&self, username: &str) -> Result<Option<User>, rusqlite::Error> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, username, password_hash, created_at, last_login, is_active, git_name, git_email, has_completed_onboarding FROM users WHERE username = ?1 AND is_active = 1",
+        )?;
+        let user = stmt
+            .query_row(rusqlite::params![username], |row| {
+                Ok(User {
+                    id: row.get(0)?,
+                    username: row.get(1)?,
+                    password_hash: row.get(2)?,
+                    created_at: row.get(3)?,
+                    last_login: row.get(4)?,
+                    is_active: row.get(5)?,
+                    git_name: row.get(6)?,
+                    git_email: row.get(7)?,
+                    has_completed_onboarding: row.get(8)?,
+                })
+            })
+            .optional()?;
+        Ok(user)
+    }
+
+    pub fn get_user_by_id(&self, user_id: i64) -> Result<Option<UserInfo>, rusqlite::Error> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, username, created_at, last_login FROM users WHERE id = ?1 AND is_active = 1",
+        )?;
+        let user = stmt
+            .query_row(rusqlite::params![user_id], |row| {
+                Ok(UserInfo {
+                    id: row.get(0)?,
+                    username: row.get(1)?,
+                    created_at: row.get(2)?,
+                    last_login: row.get(3)?,
+                })
+            })
+            .optional()?;
+        Ok(user)
+    }
+
+    pub fn get_first_user(&self) -> Result<Option<UserInfo>, rusqlite::Error> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, username, created_at, last_login FROM users WHERE is_active = 1 LIMIT 1",
+        )?;
+        let user = stmt
+            .query_row([], |row| {
+                Ok(UserInfo {
+                    id: row.get(0)?,
+                    username: row.get(1)?,
+                    created_at: row.get(2)?,
+                    last_login: row.get(3)?,
+                })
+            })
+            .optional()?;
+        Ok(user)
+    }
+
+    pub fn update_last_login(&self, user_id: i64) {
+        let conn = self.conn();
+        if let Err(e) = conn.execute(
+            "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?1",
+            rusqlite::params![user_id],
+        ) {
+            tracing::warn!("Failed to update last login: {}", e);
+        }
+    }
+
+    pub fn update_git_config(
+        &self,
+        user_id: i64,
+        git_name: &str,
+        git_email: &str,
+    ) -> Result<(), rusqlite::Error> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE users SET git_name = ?1, git_email = ?2 WHERE id = ?3",
+            rusqlite::params![git_name, git_email, user_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_git_config(&self, user_id: i64) -> Result<(Option<String>, Option<String>), rusqlite::Error> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT git_name, git_email FROM users WHERE id = ?1")?;
+        stmt.query_row(rusqlite::params![user_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+    }
+
+    pub fn complete_onboarding(&self, user_id: i64) -> Result<(), rusqlite::Error> {
+        let conn = self.conn();
+        conn.execute(
+            "UPDATE users SET has_completed_onboarding = 1 WHERE id = ?1",
+            rusqlite::params![user_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn has_completed_onboarding(&self, user_id: i64) -> Result<bool, rusqlite::Error> {
+        let conn = self.conn();
+        let mut stmt =
+            conn.prepare("SELECT has_completed_onboarding FROM users WHERE id = ?1")?;
+        let val: bool = stmt.query_row(rusqlite::params![user_id], |row| row.get(0))?;
+        Ok(val)
+    }
+}
+
+// Extension trait for optional query results
+trait OptionalExt<T> {
+    fn optional(self) -> Result<Option<T>, rusqlite::Error>;
+}
+
+impl<T> OptionalExt<T> for Result<T, rusqlite::Error> {
+    fn optional(self) -> Result<Option<T>, rusqlite::Error> {
+        match self {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+}

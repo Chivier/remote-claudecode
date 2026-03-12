@@ -137,5 +137,11 @@ tasks/
 !src/i18n/locales/ru/tasks.json
 !src/i18n/locales/de/tasks.json
 
+# Rust build artifacts
+target/
+backend/target/
+broker/target/
+*.rs.bk
+
 # Git worktrees
 .worktrees/

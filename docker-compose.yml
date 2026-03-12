@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - HOST=0.0.0.0
+      - DATABASE_PATH=/data/auth.db
+      - BROKER_PORT=19999
+    volumes:
+      - backend-data:/data
+      - ./frontend/dist:/app/frontend/dist:ro
+    depends_on:
+      - broker
+
+  broker:
+    build:
+      context: ./broker
+    ports:
+      - "19999:9999"
+    environment:
+      - RUST_LOG=cloudcli_broker=info
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://backend:3001
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:
