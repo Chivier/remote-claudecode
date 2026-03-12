@@ -121,8 +121,6 @@ impl Provider for ClaudeProvider {
         let sid = session_id.clone();
 
         // Spawn stderr reader
-        let stderr_writer = writer.clone();
-        let stderr_sid = session_id.clone();
         tokio::spawn(async move {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();

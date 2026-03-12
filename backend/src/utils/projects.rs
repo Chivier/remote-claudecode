@@ -1,6 +1,5 @@
 use serde::Serialize;
-use std::path::{Path, PathBuf};
-use tokio::process::Command;
+use std::path::Path;
 
 #[derive(Debug, Serialize)]
 pub struct ProjectInfo {

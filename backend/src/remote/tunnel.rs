@@ -133,7 +133,7 @@ impl TunnelManager {
     pub fn get_status(&self, server_id: &str) -> TunnelStatus {
         self.tunnels
             .get(server_id)
-            .map(|entry| {
+            .map(|_| {
                 // Can't await in sync context, return based on existence
                 TunnelStatus::Connected
             })

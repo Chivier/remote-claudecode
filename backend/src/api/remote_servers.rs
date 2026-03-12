@@ -4,12 +4,10 @@ use axum::{
     Json,
 };
 use serde_json::{json, Value};
-use std::sync::Arc;
 
 use crate::auth::middleware::{AppState, AuthUser};
 use crate::db::servers::{CreateServerRequest, UpdateServerRequest};
 use crate::remote::deployer;
-use crate::remote::tunnel::TunnelManager;
 
 // We need tunnel_manager accessible from the state
 // For now, we'll use a global or pass it through extension

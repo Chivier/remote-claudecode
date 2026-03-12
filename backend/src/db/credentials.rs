@@ -25,7 +25,7 @@ pub struct Credential {
 
 fn generate_api_key() -> String {
     let bytes: Vec<u8> = (0..32).map(|_| rand::thread_rng().gen::<u8>()).collect();
-    format!("ck_{}", hex::encode(bytes))
+    format!("ck_{}", hex::encode(&bytes))
 }
 
 // We need hex encoding - use a simple inline version

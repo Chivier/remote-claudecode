@@ -68,7 +68,7 @@ async fn handle_connection(
 
     while let Some(msg) = receiver.next().await {
         let msg: String = match msg {
-            Ok(Message::Text(text)) => text.into(),
+            Ok(Message::Text(text)) => text.to_string(),
             Ok(Message::Close(_)) => {
                 tracing::info!("Connection closed");
                 break;

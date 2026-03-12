@@ -5,7 +5,6 @@ pub mod credentials;
 pub mod sessions;
 
 use rusqlite::Connection;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use crate::config::Config;

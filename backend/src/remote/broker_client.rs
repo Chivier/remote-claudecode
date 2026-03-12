@@ -34,7 +34,7 @@ impl BrokerClient {
             while let Some(msg) = receiver.next().await {
                 match msg {
                     Ok(Message::Text(text)) => {
-                        let text_str: String = text.into();
+                        let text_str = text.to_string();
                         match serde_json::from_str::<BrokerResponse>(&text_str) {
                             Ok(response) => {
                                 Self::forward_to_frontend(&response, &frontend_writer, &server_id)
@@ -82,7 +82,7 @@ impl BrokerClient {
 
         let outbound = match response {
             BrokerResponse::SessionCreated {
-                session_id,
+                session_id: _,
                 actual_session_id,
             } => Some(OutboundMessage::SessionCreated {
                 session_id: actual_session_id.clone(),
@@ -113,16 +113,18 @@ impl BrokerClient {
             BrokerResponse::Complete {
                 session_id,
                 exit_code,
-            } => Some(OutboundMessage::ClaudeComplete {
+            } => {
+                // TODO: map to correct provider complete type
+                Some(OutboundMessage::ClaudeComplete {
                 session_id: session_id.clone(),
                 exit_code: *exit_code,
-            }),
+            })},
             BrokerResponse::Error { session_id, error } => Some(OutboundMessage::ClaudeError {
                 error: error.clone(),
                 session_id: session_id.clone(),
             }),
             BrokerResponse::PermissionRequest {
-                session_id,
+                session_id: _,
                 request_id,
                 tool_name,
                 params,

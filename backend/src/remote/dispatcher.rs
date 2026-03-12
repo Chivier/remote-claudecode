@@ -4,7 +4,7 @@ use std::sync::Arc;
 use super::broker_client::BrokerClient;
 use super::tunnel::TunnelManager;
 use crate::db::Database;
-use crate::ws::protocol::{BrokerRequest, CommandOptions, InboundMessage};
+use crate::ws::protocol::{BrokerRequest, InboundMessage};
 use crate::ws::writer::WsWriter;
 
 /// Unified dispatcher that routes messages to the correct broker
@@ -140,11 +140,11 @@ impl ConnectionDispatcher {
             }),
             InboundMessage::AbortSession {
                 session_id,
-                provider,
+                provider: _,
             } => Ok(BrokerRequest::Abort { session_id }),
             InboundMessage::CheckSessionStatus {
                 session_id,
-                provider,
+                provider: _,
             } => Ok(BrokerRequest::Status { session_id }),
             InboundMessage::PermissionResponse {
                 request_id,

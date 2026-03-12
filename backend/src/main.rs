@@ -8,11 +8,7 @@ mod utils;
 mod ws;
 
 use axum::{
-    extract::{
-        ws::{WebSocket, WebSocketUpgrade},
-        State,
-    },
-    response::IntoResponse,
+    extract::ws::WebSocketUpgrade,
     routing::get,
     Router,
 };
@@ -124,7 +120,7 @@ async fn main() {
 
     // Graceful shutdown
     let tunnel_manager_shutdown = tunnel_manager.clone();
-    let shutdown_signal = async {
+    let shutdown_signal = async move {
         tokio::signal::ctrl_c()
             .await
             .expect("Failed to install CTRL+C handler");
