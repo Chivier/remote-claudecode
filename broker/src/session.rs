@@ -243,9 +243,19 @@ impl SessionManager {
                     args.push(sp.to_string());
                 }
 
+                // Handle permission modes
                 if let Some(pm) = options.get("permissionMode").and_then(|v| v.as_str()) {
-                    args.push("--permission-mode".to_string());
-                    args.push(pm.to_string());
+                    match pm {
+                        "dangerouslySkipPermissions" | "bypassPermissions" | "full" => {
+                            args.push("--dangerously-skip-permissions".to_string());
+                        }
+                        "default" | "" => {}
+                        other => {
+                            // Pass other valid modes via --permission-mode
+                            args.push("--permission-mode".to_string());
+                            args.push(other.to_string());
+                        }
+                    }
                 }
 
                 args.push("--print".to_string());
@@ -259,23 +269,48 @@ impl SessionManager {
                     args.push("--model".to_string());
                     args.push(model.to_string());
                 }
+                if let Some(pm) = options.get("permissionMode").and_then(|v| v.as_str()) {
+                    match pm {
+                        "dangerouslySkipPermissions" | "bypassPermissions" | "full" => {
+                            args.push("--full-auto".to_string());
+                        }
+                        _ => {}
+                    }
+                }
                 args.push(command.to_string());
                 (Self::find_cli_path("codex"), args)
             }
-            "cursor" => {
+            "opencode" => {
                 let mut args = vec![];
                 if let Some(model) = options.get("model").and_then(|v| v.as_str()) {
                     args.push("--model".to_string());
                     args.push(model.to_string());
                 }
+                if let Some(pm) = options.get("permissionMode").and_then(|v| v.as_str()) {
+                    match pm {
+                        "dangerouslySkipPermissions" | "bypassPermissions" | "full" => {
+                            args.push("--auto-approve".to_string());
+                        }
+                        _ => {}
+                    }
+                }
+                args.push("--quiet".to_string());
                 args.push(command.to_string());
-                (Self::find_cli_path("cursor"), args)
+                (Self::find_cli_path("opencode"), args)
             }
             "gemini" => {
                 let mut args = vec![];
                 if let Some(model) = options.get("model").and_then(|v| v.as_str()) {
                     args.push("--model".to_string());
                     args.push(model.to_string());
+                }
+                if let Some(pm) = options.get("permissionMode").and_then(|v| v.as_str()) {
+                    match pm {
+                        "dangerouslySkipPermissions" | "bypassPermissions" | "full" => {
+                            args.push("--sandbox".to_string());
+                        }
+                        _ => {}
+                    }
                 }
                 args.push(command.to_string());
                 (Self::find_cli_path("gemini"), args)
